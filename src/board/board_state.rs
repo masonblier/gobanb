@@ -1,11 +1,9 @@
 use crate::actions::MouseCamera;
+use crate::board::game_board::{GameBoard, GameBoardMove, GameBoardEffectType, try_move};
 use crate::game_state::GameState;
 use bevy::prelude::*;
-use bevy::input::mouse::MouseButtonInput;
-use bevy::render::mesh::{Indices,PrimitiveTopology};
-use rand::distributions::Standard;
-use std::collections::HashMap;
 use bevy_rapier3d::prelude::*;
+use std::collections::HashMap;
 
 const SPACING: f32 = 0.015;
 
@@ -13,13 +11,12 @@ pub struct BoardStatePlugin;
 
 #[derive(Default, Resource)]
 pub struct BoardState {
-    initialized: bool,
     player_turn: usize,
     pause_actions: f32,
-    spaces: HashMap<(usize,usize),usize>,
     light_stone: Handle<StandardMaterial>,
     dark_stone: Handle<StandardMaterial>,
     stone_mesh: Handle<Mesh>,
+    piece_ents: HashMap<(usize,usize),Entity>,
 }
 
 
@@ -32,6 +29,7 @@ impl Plugin for BoardStatePlugin {
     fn build(&self, app: &mut App) {
         app
             .init_resource::<BoardState>()
+            .init_resource::<GameBoard>()
             .add_system_set(SystemSet::on_enter(GameState::Running).with_system(setup_world_loading))
             .add_system_set(SystemSet::on_update(GameState::Running).with_system(update_board_state))
             ;
@@ -49,7 +47,7 @@ fn setup_world_loading(
     board_state.pause_actions = 0.2;
 
     // light
-    commands.spawn_bundle(PointLightBundle {
+    commands.spawn(PointLightBundle {
         transform: Transform::from_xyz(50.0, 50.0, 50.0),
         point_light: PointLight {
             intensity: 6000000.,
@@ -78,13 +76,13 @@ fn setup_world_loading(
     }));
 
     // active piece
-    commands.spawn_bundle(PbrBundle {
+    commands.spawn(PbrBundle {
         mesh: board_state.stone_mesh.clone(),
         material: board_state.dark_stone.clone(),
         transform: Transform::from_xyz(0.,  -9999., 0.).with_scale(Vec3::new(1.0,0.5,1.0)),
         ..default()
     }).insert(BoardActivePiece { player: 0 });
-    commands.spawn_bundle(PbrBundle {
+    commands.spawn(PbrBundle {
         mesh: board_state.stone_mesh.clone(),
         material: board_state.light_stone.clone(),
         transform: Transform::from_xyz(0.,  -9999., 0.).with_scale(Vec3::new(1.0,0.5,1.0)),
@@ -109,6 +107,7 @@ fn setup_world_loading(
 fn update_board_state(
     mut commands: Commands,
     mut board_state: ResMut<BoardState>,
+    mut game_board: ResMut<GameBoard>,
     time: Res<Time>,
     windows: Res<Windows>,
     rapier_context: Res<RapierContext>,
@@ -139,33 +138,47 @@ fn update_board_state(
 
 
         let player_turn = board_state.player_turn;
-        let active_transform = if let Some((entity, toi)) = hit {
+        let active_transform = if let Some((_entity, toi)) = hit {
             let space_pos = ray_pos + ray_dir * toi;
             let space_x = (space_pos.x * (1. / SPACING) + 0.5).floor().min(9.).max(-9.) + 9.;
             let space_z = (space_pos.z * (1. / SPACING) + 0.5).floor().min(9.).max(-9.) + 9.;
-            let nearest_square = Vec3::new(
-                space_x - 9.,
-                0.5,
-                space_z - 9.,
-            );
 
             let space_key = (space_x as usize, space_z as usize);
-            if board_state.spaces.contains_key(&space_key) {
+            if game_board.spaces.contains_key(&space_key) {
                 Vec3::Y * -9999.
             } else {
                 if mouse_btn_input.just_released(MouseButton::Left) {
-                    board_state.spaces.insert(space_key, player_turn);
-                    commands.spawn_bundle(PbrBundle {
-                        mesh: board_state.stone_mesh.clone(),
-                        material: if player_turn == 1 { board_state.light_stone.clone() } else { board_state.dark_stone.clone() },
-                        transform: Transform::from_translation(SPACING * nearest_square).with_scale(Vec3::new(1.0,0.5,1.0)),
-                        ..default()
-                    });
+                    let effects = try_move(&mut game_board, GameBoardMove { player: player_turn, space: space_key});
+                    for effect in effects.iter() {
+                        match effect.effect {
+                            GameBoardEffectType::AddPiece(tried_move) => {
+                                let space_coords = Vec3::new(
+                                    tried_move.space.0 as f32 - 9.,
+                                    0.5,
+                                    tried_move.space.1 as f32 - 9.,
+                                );
+                                let ent_id = commands.spawn(PbrBundle {
+                                    mesh: board_state.stone_mesh.clone(),
+                                    material: if tried_move.player == 1 { board_state.light_stone.clone() } else { board_state.dark_stone.clone() },
+                                    transform: Transform::from_translation(SPACING * space_coords).with_scale(Vec3::new(1.0,0.5,1.0)),
+                                    ..default()
+                                }).id();
+                                board_state.piece_ents.insert(space_key, ent_id);
+                            }
+                            GameBoardEffectType::RemovePiece(removed_move) => {
+                                if let Some(ent_id) = board_state.piece_ents.remove(&removed_move.space) {
+                                    commands.entity(ent_id).despawn_recursive();
+                                }
+                            }
+                            GameBoardEffectType::TogglePlayer => {
+                                board_state.player_turn = (player_turn + 1) % 2;
+                            }
+                        }
+                    }
 
-                    board_state.player_turn = (player_turn + 1) % 2;
                     board_state.pause_actions = 0.05;
                 }
-                SPACING * nearest_square
+                SPACING * Vec3::new(space_x - 9.,0.5,space_z - 9.)
             }
         } else {
             Vec3::Y * -9999.
