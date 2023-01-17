@@ -1,4 +1,3 @@
-use crate::GameState;
 use bevy::prelude::*;
 use bevy_kira_audio::prelude::*;
 
@@ -10,14 +9,4 @@ impl Plugin for InternalAudioPlugin {
         app.add_plugin(AudioPlugin)
             ;
     }
-}
-
-fn start_audio(mut commands: Commands, audio: Res<Audio>) {
-
-}
-
-fn control_flying_sound(
-    mut audio_instances: ResMut<Assets<AudioInstance>>,
-) {
-
 }

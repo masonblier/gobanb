@@ -1,6 +1,7 @@
 use crate::game_state::GameState;
 use crate::actions::MouseCamera;
 use bevy::prelude::*;
+use bevy_kira_audio::prelude::*;
 
 pub struct PreLoadingPlugin;
 
@@ -9,6 +10,8 @@ pub struct PreLoadingState {
     pub pre_loaded: bool,
     pub font_handle: Handle<Font>,
     pub ui_entity: Option<Entity>,
+    pub sound_01: Handle<AudioSource>,
+    pub sound_02: Handle<AudioSource>,
 }
 
 /// This plugin is responsible for the game menu (containing only one button...)
@@ -42,6 +45,9 @@ fn setup_pre_loading(
     // Load font
     pre_loading_state.font_handle = asset_server.load("fonts/FiraSans-Bold.ttf");
 
+    // Load sounds
+    pre_loading_state.sound_01 = asset_server.load("audio/goban_01.ogg");
+    pre_loading_state.sound_02 = asset_server.load("audio/goban_02.ogg");
 }
 
 fn update_pre_loading(

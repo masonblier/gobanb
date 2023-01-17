@@ -1,7 +1,9 @@
 use crate::actions::MouseCamera;
 use crate::board::game_board::{GameBoard, GameBoardMove, GameBoardEffectType, try_move};
 use crate::game_state::GameState;
+use crate::loading::PreLoadingState;
 use bevy::prelude::*;
+use bevy_kira_audio::prelude::*;
 use bevy_rapier3d::prelude::*;
 use std::collections::HashMap;
 
@@ -108,6 +110,8 @@ fn update_board_state(
     mut commands: Commands,
     mut board_state: ResMut<BoardState>,
     mut game_board: ResMut<GameBoard>,
+    preloading: ResMut<PreLoadingState>,
+    audio: Res<Audio>,
     time: Res<Time>,
     windows: Res<Windows>,
     rapier_context: Res<RapierContext>,
@@ -171,6 +175,11 @@ fn update_board_state(
                                 }
                             }
                             GameBoardEffectType::TogglePlayer => {
+                                audio.play(if player_turn == 0 {
+                                    preloading.sound_01.clone()
+                                } else {
+                                    preloading.sound_02.clone()
+                                });
                                 board_state.player_turn = (player_turn + 1) % 2;
                             }
                         }

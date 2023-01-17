@@ -54,13 +54,30 @@ pub fn get_surrounded_positions(game_board: &GameBoard, last_move: GameBoardMove
         for j in 0..19 {
             if game_board.spaces.contains_key(&(i, j)) {
                 let space_player = *game_board.spaces.get(&(i, j)).unwrap();
-                let group_id = if i > 0 && space_groups.contains_key(&(i - 1, j)) && (*game_board.spaces.get(&(i - 1, j)).unwrap() == space_player) {
-                    *space_groups.get(&(i - 1, j)).unwrap()
-                } else if j > 0 && game_board.spaces.contains_key(&(i, j - 1)) && (*game_board.spaces.get(&(i, j - 1)).unwrap() == space_player) {
-                    *space_groups.get(&(i, j - 1)).unwrap()
+                let i_group_id = if i > 0 && space_groups.contains_key(&(i - 1, j)) && (*game_board.spaces.get(&(i - 1, j)).unwrap() == space_player) {
+                    Some(*space_groups.get(&(i - 1, j)).unwrap())
                 } else {
-                    group_stats.push((space_player, false));
-                    group_stats.len() - 1
+                    None
+                };
+                let group_id = if j > 0 && game_board.spaces.contains_key(&(i, j - 1)) && (*game_board.spaces.get(&(i, j - 1)).unwrap() == space_player) {
+                    let j_group_id = *space_groups.get(&(i, j - 1)).unwrap();
+                    if i_group_id.is_some() && Some(j_group_id) != i_group_id {
+                        for (_, group_id) in space_groups.iter_mut() {
+                            if *group_id == j_group_id {
+                                *group_id = i_group_id.unwrap();
+                            }
+                        }
+                        i_group_id.unwrap()
+                    } else {
+                        j_group_id
+                    }
+                } else {
+                    if i_group_id.is_some() {
+                        i_group_id.unwrap()
+                    } else {
+                        group_stats.push((space_player, false));
+                        group_stats.len() - 1
+                    }
                 };
                 group_stats[group_id].1 = group_stats[group_id].1 ||
                     (i > 0 && !game_board.spaces.contains_key(&(i - 1, j))) ||
